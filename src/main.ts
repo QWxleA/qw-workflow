@@ -1,6 +1,6 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, setIcon, TFile } from 'obsidian';
 import { SampleSettingTab } from './SampleSettingTab';
-import { getFrontmatterProperty, updateFrontmatterProperty } from './frontmatter-utils';
+import { MessageCategory, messages } from './messages';
 
 
 // Remember to rename these classes and interfaces!
@@ -19,8 +19,8 @@ const DEFAULT_SETTINGS: WorkflowSettings = {
 
 interface NoteMetadata {
     title: string;
-    status: string;
-    description: string;
+    status: string | null;
+    description: string | null;
     sources: number;
     ankiCards: number;
     illustration: boolean;
@@ -36,7 +36,7 @@ export default class WorkflowPlugin extends Plugin {
 		const ribbonIconEl = this.addRibbonIcon('telescope', 'Sample Plugin', (evt: MouseEvent) => {
 			// Called when the user clicks the icon.
 			// new Notice('This is a notice!');
-			new WorkflowModal(this.app).open();
+			new NoteInfoModal(this.app).open();
 		});
 		// Perform additional things with the ribbon
 		//ribbonIconEl.addClass('my-plugin-ribbon-class');
@@ -53,7 +53,7 @@ export default class WorkflowPlugin extends Plugin {
 		// Add click handler to status bar item
 		statusBarItemEl.onClickEvent(() => {
 			// new Notice('No active pomodoro. Start one from the command palette.');
-			new WorkflowModal(this.app).open();
+			new NoteInfoModal(this.app).open();
 		});
 
 		// Add DEBUG command
@@ -94,7 +94,7 @@ export default class WorkflowPlugin extends Plugin {
 					// If checking is true, we're simply "checking" if the command can be run.
 					// If checking is false, then we want to actually perform the operation.
 					if (!checking) {
-						new WorkflowModal(this.app).open();
+						new NoteInfoModal(this.app).open();
 					}
 
 					// This command will only show up in Command Palette when the check function returns true
@@ -130,98 +130,216 @@ export default class WorkflowPlugin extends Plugin {
 	}
 }
 
-class WorkflowModal extends Modal {
-	settings: WorkflowSettings;
-	plugin: WorkflowPlugin;
+export class NoteInfoModal extends Modal {
+    private file: TFile | null;
+    
+    constructor(app: App) {
+        super(app);
+        this.file = this.app.workspace.getActiveFile();
+    }
+    
+    async onOpen() {
+        const { contentEl } = this;
+        
+        // Apply some base styling to the modal
+        contentEl.addClass('note-workflow-modal');
+        
+        // Get metadata
+        const metadata = await this.getNoteMetadata();
+        
+        // Render title
+        this.renderTitle(contentEl);
+        
+        // Render metadata in a box
+        this.renderMetadataBox(contentEl, metadata);
+        
+        // Render workflow guidance
+        this.renderWorkflowGuidance(contentEl, metadata);
+        
+        // Add interactive buttons
+        this.addInteractionButtons(contentEl, metadata);
+    }
+    
+    onClose() {
+        const { contentEl } = this;
+        contentEl.empty();
+    }
+    
+	
+    private renderTitle(container: HTMLElement): void {
+        const titleEl = container.createEl('h1', { 
+            text: 'Note Taking Workflow 1.0',
+            cls: 'workflow-title'
+        });
+        
+        // Add some styling to the title
+        titleEl.style.borderBottom = '2px solid var(--interactive-accent)';
+        titleEl.style.paddingBottom = '10px';
+        titleEl.style.marginBottom = '20px';
+        titleEl.style.color = 'var(--text-accent)';
+    }
+    
+    private async getNoteMetadata(): Promise<NoteMetadata> {
+        const metadata: NoteMetadata = {
+            title: "No active file?!?",
+            status: null,
+            description: null,
+            sources: 0,
+            ankiCards: 0,
+            illustration: false
+        };
+        
+        if (!this.file) {
+            return metadata;
+        }
+        
+        metadata.title = this.file.basename;
+        
+        await this.app.fileManager.processFrontMatter(this.file, (frontmatter) => {
+            metadata.status = frontmatter.status ?? metadata.status;
+            metadata.description = frontmatter.description ?? metadata.description;
+            // Additional counting logic here
+        });
+        
+        return metadata;
+    }
+    
+    private renderMetadataBox(container: HTMLElement, metadata: NoteMetadata): void {
+        // Create a box for metadata
+        const metadataBox = container.createEl('div', { cls: 'metadata-box' });
+        
+        // Style the box
+        metadataBox.style.border = '1px solid var(--background-modifier-border)';
+        metadataBox.style.borderRadius = '5px';
+        metadataBox.style.padding = '15px';
+        metadataBox.style.marginBottom = '20px';
+        metadataBox.style.backgroundColor = 'var(--background-secondary)';
+        
+        // Add a metadata title
+        metadataBox.createEl('h2', { 
+            text: 'Current Note Metadata',
+            cls: 'metadata-title'
+        }).style.marginTop = '0';
+        
+        // Create a table for metadata
+        const table = metadataBox.createEl('table');
+        table.style.width = '100%';
+        
+        // Add table rows for each metadata item
+        this.addMetadataRow(table, 'Title', metadata.title);
+        this.addMetadataRow(table, 'Status', (metadata.status) ? metadata.status : messages[MessageCategory.STATUS_INDICATORS].MISSING);
+        this.addMetadataRow(table, 'Description', (metadata.description ? metadata.description : messages[MessageCategory.STATUS_INDICATORS].MISSING));
+        this.addMetadataRow(table, 'Sources', metadata.sources.toString());
+        this.addMetadataRow(table, 'Anki Cards', metadata.ankiCards.toString());
+        // this.addMetadataRow(table, 'Illustration', metadata.illustration ? '✅ Found' : '❌ Missing');
+		this.addMetadataRow(table, 'Illustration', metadata.illustration ? 
+            messages[MessageCategory.STATUS_INDICATORS].FOUND : 
+            messages[MessageCategory.STATUS_INDICATORS].MISSING
+        );
+    }
+    
+	private addMetadataRow(table: HTMLTableElement, label: string, value: string): void {
+        const row = table.createEl('tr');
+        
+        const labelCell = row.createEl('td', { text: label });
+        labelCell.style.fontWeight = 'bold';
+        labelCell.style.padding = '5px 10px 5px 0';
+        labelCell.style.width = '30%';
+        
+        const valueCell = row.createEl('td', { text: value });
+        valueCell.style.padding = '5px 0';
+    }
 
-	constructor(app: App) {
-		super(app);
-	}
-
-	// Function to get note metadata from a file
-	async getNoteMetadata(app: App, file: TFile | null): Promise<NoteMetadata> {
-		// Default values
-		const metadata: NoteMetadata = {
-			title: "No active file?!?",
-			status: "Status is not set",
-			description: "Description is not set",
-			sources: 0,
-			ankiCards: 0,
-			illustration: false
-		};
+	private renderWorkflowGuidance(container: HTMLElement, metadata: NoteMetadata): void {
+		const guidanceBox = container.createEl('div', { cls: 'guidance-box' });
 		
-		if (!file) {
-			return metadata;
-		}
+		// Style already applied via CSS
 		
-		// Set title from the file
-		metadata.title = file.basename;
+        // Add a heading
+        guidanceBox.createEl('h3', { 
+            text: 'Workflow Guidance', 
+            cls: 'guidance-title' 
+        });
 		
-		// Get frontmatter data
-		await app.fileManager.processFrontMatter(file, (frontmatter) => {
-			// Use optional chaining and nullish coalescing for cleaner code
-			metadata.status = frontmatter.status ?? metadata.status;
-			metadata.description = frontmatter.description ?? metadata.description;
-			
-			// You can add your counting logic here
-			// metadata.sources = countSources(frontmatter);
-			// metadata.ankiCards = countAnkiCards(frontmatter);
-			// metadata.illustration = checkForIllustration(frontmatter);
+		// Add the workflow guidance
+		guidanceBox.createEl('p', { 
+			text: 'To improve this note, focus on the following steps:'
 		});
 		
-		return metadata;
-	}
-
-	// Function to render metadata to container
-	renderMetadata(container: HTMLElement, metadata: NoteMetadata): void {
-		container.createEl('h2', { text: `Current note: ${metadata.title}` });
-		container.createEl('p', { text: `Current status: ${metadata.status}` });
-		container.createEl('p', { text: `Description: ${metadata.description}` });
-		container.createEl('p', { text: `No of sources: ${metadata.sources}` });
-		container.createEl('p', { text: `No of Anki cards: ${metadata.ankiCards}` });
-		container.createEl('p', { text: metadata.illustration ? "Found illustration(s)" : "Add an illustration" });
-	}
-
-	// Usage in your modal or component
-	async displayNoteInfo(app: App, file: TFile | null, contentEl: HTMLElement): Promise<void> {
-		const metadata = await this.getNoteMetadata(app, file);
-		this.renderMetadata(contentEl, metadata);
-	}
-
-	async onOpen() {	
-		const file = this.app.workspace.getActiveFile();
-		this.displayNoteInfo(this.app, file, this.contentEl);
+		// Add bullet points with more specific guidance
+		const ul = guidanceBox.createEl('ul');
 		
-		this.contentEl.createEl('p', { text: "moar" });
-
-		// const {contentEl} = this;
-		// Create buttons container
-		// const buttonContainer = contentEl.createDiv('button-container');
-		// buttonContainer.style.display = 'flex';
-		// buttonContainer.style.justifyContent = 'space-around';
-		// buttonContainer.style.marginTop = '20px';
-		
-		// // Stop button
-		// const stopBtn = buttonContainer.createEl('button', {text: 'Stop'});
-		// stopBtn.addEventListener('click', () => {
-		// 	// this.plugin.stopTimer();
-		// 	this.close();
-		// });
-		
-		// // Restart button
-		// const restartBtn = buttonContainer.createEl('button', {text: 'Restart'});
-		// restartBtn.addEventListener('click', () => {
-		// 	// this.plugin.restartTimer();
-		// 	this.close();
-		// });
-	}
-
-	onClose() {
-		const {contentEl} = this;
-		contentEl.empty();
-	}
-
+		if (metadata.status) {
+			ul.createEl('li', { 
+				text: 'Review and update the status to reflect the current stage of the note'
+			});
+		} else {
+			ul.createEl('li').innerHTML = 'Missing status! Start with adding:  <strong>unprocessed</strong>';
 	
+		}
+
+		if (metadata.description) {
+			ul.createEl('li', { 
+				text: 'Ensure the description succinctly captures the main idea of the note'
+			});
+		} else {
+			ul.createEl('li').innerHTML = 'Missing description! Write something short for use with <strong>dataview</strong>';
+		}
+		
+		ul.createEl('li', { 
+			text: 'Verify all claims have proper sources cited (aim for at least 3 sources)'
+		});
+		
+		ul.createEl('li', { 
+			text: 'Create Anki cards for key concepts (minimum 3 recommended)'
+		});
+		
+		ul.createEl('li', { 
+			text: 'Add a visual element to enhance understanding (diagram, chart, or image)'
+		});
+	}
+    
+    private addInteractionButtons(container: HTMLElement, metadata: NoteMetadata): void {
+        // Create a button container
+        const buttonContainer = container.createEl('div', { cls: 'button-container' });
+        
+        // Style the button container
+        buttonContainer.style.display = 'flex';
+        buttonContainer.style.gap = '10px';
+        buttonContainer.style.marginTop = '20px';
+        buttonContainer.style.justifyContent = 'flex-end';
+        
+        // Add status button
+        const statusButton = buttonContainer.createEl('button', { 
+            text: 'Log Status',
+            cls: 'mod-cta'
+        });
+        statusButton.addEventListener('click', () => {
+            console.log(metadata.status);
+        });
+        
+        // Add filename button
+        const filenameButton = buttonContainer.createEl('button', {
+            text: 'Log Filename'
+        });
+        filenameButton.addEventListener('click', () => {
+            if (this.file) {
+                console.log(this.file.basename);
+            } else {
+                console.log("No active file");
+            }
+        });
+        
+        // Add close button
+        const closeButton = buttonContainer.createEl('button', {
+            text: 'Close',
+            cls: 'mod-warning'
+        });
+        closeButton.addEventListener('click', () => {
+            this.close();
+        });
+    }
 }
+
 
 

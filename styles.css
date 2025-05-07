@@ -6,3 +6,51 @@ available in the app when your plugin is enabled.
 If your plugin does not need CSS, delete this file.
 
 */
+/* styles.css */
+.note-workflow-modal .workflow-title {
+    font-size: 2em;
+    text-align: center;
+    color: var(--text-accent);
+    border-bottom: 2px solid var(--interactive-accent);
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+.note-workflow-modal .metadata-box {
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 5px;
+    padding: 15px;
+    margin-bottom: 20px;
+    background-color: var(--background-secondary);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.note-workflow-modal .guidance-box {
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 5px;
+    padding: 15px;
+    margin-bottom: 20px;
+    background-color: var(--background-primary-alt);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.note-workflow-modal .button-container {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+    justify-content: flex-end;
+}
+
+.note-workflow-modal table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.note-workflow-modal td {
+    padding: 8px 5px;
+    border-bottom: 1px solid var(--background-modifier-border-subtle);
+}
+
+.note-workflow-modal tr:last-child td {
+    border-bottom: none;
+}
