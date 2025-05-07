@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, setIcon } from 'obsidian';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, setIcon, TFile } from 'obsidian';
 import { SampleSettingTab } from './SampleSettingTab';
 import { getFrontmatterProperty, updateFrontmatterProperty } from './frontmatter-utils';
 
@@ -15,6 +15,15 @@ const DEFAULT_SETTINGS: WorkflowSettings = {
 	mySetting: 'default',
 	dailyNoteFolder: '/Journal',
 	dailyNoteFormat: 'YYYY-MM-DD'
+}
+
+interface NoteMetadata {
+    title: string;
+    status: string;
+    description: string;
+    sources: number;
+    ankiCards: number;
+    illustration: boolean;
 }
 
 export default class WorkflowPlugin extends Plugin {
@@ -129,66 +138,90 @@ class WorkflowModal extends Modal {
 		super(app);
 	}
 
-	async onOpen() {
-		const {contentEl} = this;
+	// Function to get note metadata from a file
+	async getNoteMetadata(app: App, file: TFile | null): Promise<NoteMetadata> {
+		// Default values
+		const metadata: NoteMetadata = {
+			title: "No active file?!?",
+			status: "Status is not set",
+			description: "Description is not set",
+			sources: 0,
+			ankiCards: 0,
+			illustration: false
+		};
+		
+		if (!file) {
+			return metadata;
+		}
+		
+		// Set title from the file
+		metadata.title = file.basename;
+		
+		// Get frontmatter data
+		await app.fileManager.processFrontMatter(file, (frontmatter) => {
+			// Use optional chaining and nullish coalescing for cleaner code
+			metadata.status = frontmatter.status ?? metadata.status;
+			metadata.description = frontmatter.description ?? metadata.description;
+			
+			// You can add your counting logic here
+			// metadata.sources = countSources(frontmatter);
+			// metadata.ankiCards = countAnkiCards(frontmatter);
+			// metadata.illustration = checkForIllustration(frontmatter);
+		});
+		
+		return metadata;
+	}
 
+	// Function to render metadata to container
+	renderMetadata(container: HTMLElement, metadata: NoteMetadata): void {
+		container.createEl('h2', { text: `Current note: ${metadata.title}` });
+		container.createEl('p', { text: `Current status: ${metadata.status}` });
+		container.createEl('p', { text: `Description: ${metadata.description}` });
+		container.createEl('p', { text: `No of sources: ${metadata.sources}` });
+		container.createEl('p', { text: `No of Anki cards: ${metadata.ankiCards}` });
+		container.createEl('p', { text: metadata.illustration ? "Found illustration(s)" : "Add an illustration" });
+	}
 
-		// const title = "haha";
-		// contentEl.createEl('h2', {text: title});
+	// Usage in your modal or component
+	async displayNoteInfo(app: App, file: TFile | null, contentEl: HTMLElement): Promise<void> {
+		const metadata = await this.getNoteMetadata(app, file);
+		this.renderMetadata(contentEl, metadata);
+	}
 
-		// contentEl.createEl('p', {
-		// 	text: "Frontmatter"
-		// });
-		//status
-		// get the current file and check if the "Date Completed" property is blank (but also present). If so then set it to the current time with MomentJS
-		let file = this.app.workspace.getActiveFile();
-		let description: string = "Description is not set";
-		let status: string = "status is not set";
-		let title: string = "No active file?!?";
-		let sources: number = 0;
-		let ankiCards: number = 0;
+	async onOpen() {	
+		const file = this.app.workspace.getActiveFile();
+		this.displayNoteInfo(this.app, file, this.contentEl);
+		
+		this.contentEl.createEl('p', { text: "moar" });
 
-		if (file) {
-            await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
-                if (frontmatter["status"]) { status = frontmatter["status"]; }
-				if (frontmatter["description"]) { status = frontmatter["description"]; }
-				title = file.basename;
-				//count sources
-				//count ankiCards
- 				});
-        } 
-		// console.log(file)
-		contentEl.createEl('h2', { text: `Current note: ${title}` });		
-		contentEl.createEl('p', { text: `Current status: ${status}` });		
-		contentEl.createEl('p', { text: `Description: ${description}` });		
-		contentEl.createEl('p', { text: `No of sources: ${sources}` });		
-		contentEl.createEl('p', { text: `No of Anki cards: ${ankiCards}` });		
-
+		// const {contentEl} = this;
 		// Create buttons container
-		const buttonContainer = contentEl.createDiv('button-container');
-		buttonContainer.style.display = 'flex';
-		buttonContainer.style.justifyContent = 'space-around';
-		buttonContainer.style.marginTop = '20px';
+		// const buttonContainer = contentEl.createDiv('button-container');
+		// buttonContainer.style.display = 'flex';
+		// buttonContainer.style.justifyContent = 'space-around';
+		// buttonContainer.style.marginTop = '20px';
 		
-		// Stop button
-		const stopBtn = buttonContainer.createEl('button', {text: 'Stop'});
-		stopBtn.addEventListener('click', () => {
-			// this.plugin.stopTimer();
-			this.close();
-		});
+		// // Stop button
+		// const stopBtn = buttonContainer.createEl('button', {text: 'Stop'});
+		// stopBtn.addEventListener('click', () => {
+		// 	// this.plugin.stopTimer();
+		// 	this.close();
+		// });
 		
-		// Restart button
-		const restartBtn = buttonContainer.createEl('button', {text: 'Restart'});
-		restartBtn.addEventListener('click', () => {
-			// this.plugin.restartTimer();
-			this.close();
-		});
+		// // Restart button
+		// const restartBtn = buttonContainer.createEl('button', {text: 'Restart'});
+		// restartBtn.addEventListener('click', () => {
+		// 	// this.plugin.restartTimer();
+		// 	this.close();
+		// });
 	}
 
 	onClose() {
 		const {contentEl} = this;
 		contentEl.empty();
 	}
+
+	
 }
 
 
